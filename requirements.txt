@@ -1,0 +1,39 @@
+# Base development tools
+build-essential
+gcc
+g++
+make
+cmake
+pkg-config
+
+# Golang (>= 1.22)
+golang
+
+# Linux kernel headers 
+linux-headers-$(uname -r)
+
+# nftables + netfilter dev libraries
+nftables
+libnftnl-dev
+libmnl-dev
+
+# BPF toolchain (for tc/eBPF)
+clang
+lld
+llvm
+libbpf-dev
+bpftool # might need to custom install depending on linux kernel version
+iproute2
+
+# systemd development files
+systemd
+systemd-dev (or libsystemd-dev)
+
+# DNS + networking helpers
+libpcap-dev
+
+# Packaging tools 
+dpkg-dev
+fakeroot
+rpm
+rpm-build
