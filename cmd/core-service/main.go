@@ -7,7 +7,7 @@ import (
 
 func main() {
 
-	if _, err := core.LoadPolicy("../../policy.json"); err != nil {
+	if err := core.ReloadPolicy("policy.json"); err != nil {
 		log.Fatalf("Failed to load policy: %v", err)
 	}
 

@@ -5,59 +5,50 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync"
+	"sync/atomic"
 )
 
-var currentPolicy *Policy
-var policyMutex sync.RWMutex
+var currentPolicy atomic.Value
 
-// `...` -> takes the JSON format and feeds it into the Golang's CamelCase variable.
+func init() {
+	currentPolicy.Store(&Policy{})
+}
+
 type Policy struct {
 	AllowedDomains []string `json:"allowed_domains"`
 	AllowedApps    []string `json:"allowed_apps"`
 	AllowedIPs     []string `json:"allowed_ips"`
 }
 
-func (p *Policy) IsAllowedDomain(domain string) bool {
-	for _, d := range p.AllowedDomains {
-		if strings.HasSuffix(domain, d) {
-			return true
-		}
-	}
-	return false
-}
-
 func GetPolicy() *Policy {
-	policyMutex.RLock()
-	defer policyMutex.RUnlock()
-	return currentPolicy
+	return currentPolicy.Load().(*Policy)
 }
 
-func LoadPolicy(path string) (*Policy, error) {
-
+func ReloadPolicy(path string) error {
 	content, err := os.ReadFile(path)
-
 	if err != nil {
-		return nil, fmt.Errorf("read policy file: %w", err)
+		return fmt.Errorf("read policy file: %w", err)
 	}
 
 	var p Policy
 	if err := json.Unmarshal(content, &p); err != nil {
-		return nil, fmt.Errorf("unmarshal policy json: %w", err)
+		return fmt.Errorf("unmarshal policy json: %w", err)
 	}
 
-	return &p, nil
-}
-
-func ReloadPolicy(path string) error {
-	newPolicy, err := LoadPolicy(path)
-	if err != nil {
-		return err
-	}
-
-	policyMutex.Lock()
-	currentPolicy = newPolicy
-	defer policyMutex.Unlock()
+	currentPolicy.Store(&p)
 
 	return nil
+}
+
+func (p *Policy) IsAllowedDomain(domain string) bool {
+
+	for _, d := range p.AllowedDomains {
+		if d == domain {
+			return true
+		}
+		if strings.HasSuffix(domain, "."+d) {
+			return true
+		}
+	}
+	return false
 }
