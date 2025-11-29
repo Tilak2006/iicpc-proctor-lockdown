@@ -9,13 +9,6 @@ import (
 
 var logChannel = make(chan string)
 
-var allowedDomains = []string{
-	"codeforces.com.",
-	"www.codeforces.com.",
-	"iicpc.com.",
-	"www.iicpc.com.",
-}
-
 func StartLogger() {
 	for {
 		domain := <-logChannel
