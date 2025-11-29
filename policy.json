@@ -1,0 +1,15 @@
+{
+  "allowed_domains": [
+    "codeforces.com",
+    ".codeforces.com"
+  ],
+  "allowed_apps": [
+    "/usr/bin/chromium",
+    "/usr/bin/chrome"
+  ],
+  "allowed_ips": [
+    "185.235.80.0/24",
+    "140.82.112.0/20",
+    "127.0.0.1"
+  ]
+}
