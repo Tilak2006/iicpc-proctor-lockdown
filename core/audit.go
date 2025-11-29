@@ -1,8 +1,8 @@
 package core
 
 import (
-	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"sync"
 	"time"
@@ -16,92 +16,49 @@ type AuditEntry struct {
 }
 
 var auditPool = sync.Pool{
-	New: func() any {
+	New: func() interface{} {
 		return &AuditEntry{}
 	},
 }
 
-var bufferPool = sync.Pool{
-	New: func() any {
-		return new(bytes.Buffer)
-	},
-}
+func LogToDisk(ip, domain string, allowed bool, filename string) error {
+	// borrows the generic item (interface{}) from auditPool
+	v := auditPool.Get()
 
-var auditChan = make(chan []byte, 100_000)
+	// this tells the compiler "Trust me, this box contains an *AuditEntry"
+	entry := v.(*AuditEntry)
 
-func NewAuditEntry() *AuditEntry {
-	e := auditPool.Get().(*AuditEntry)
-	return e
-}
+	entry.Timestamp = time.Now().Unix()
+	entry.ClientIP = ip
+	entry.Domain = domain
+	entry.Allowed = allowed
 
-func ReleaseAuditEntry(e *AuditEntry) {
-	*e = AuditEntry{}
-	auditPool.Put(e)
-}
-
-func logAudit(clientIP, domain string, allowed bool) {
-	e := NewAuditEntry()
-	e.Timestamp = time.Now().UnixNano()
-	e.ClientIP = clientIP
-	e.Domain = domain
-	e.Allowed = allowed
-
-	buf := bufferPool.Get().(*bytes.Buffer)
-	buf.Reset()
-
-	json.NewEncoder(buf).Encode(e)
-
-	ReleaseAuditEntry(e)
-
-	// send to writer — never block
-	select {
-	case auditChan <- buf.Bytes():
-	default:
-	}
-
-}
-
-func StartAuditWriter(path string) error {
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		// Even if writing fails, we MUST still return the struct to the pool!
+		resetAndPutBack(entry)
+		return fmt.Errorf("failed to open audit log: %w", err)
 	}
 
-	go func() {
-		defer f.Close()
+	// Create a JSON encoder and write the line
+	if err := json.NewEncoder(f).Encode(entry); err != nil {
+		f.Close()
+		resetAndPutBack(entry)
+		return fmt.Errorf("failed to write audit log: %w", err)
+	}
+	f.Close()
 
-		batch := make([][]byte, 0, 4096)
-		ticker := time.NewTicker(50 * time.Millisecond)
-		defer ticker.Stop()
-
-		for {
-			select {
-			case entry := <-auditChan:
-				batch = append(batch, entry)
-
-				if len(batch) >= 4096 {
-					flushBatch(f, batch)
-					batch = batch[:0]
-				}
-
-			case <-ticker.C:
-				if len(batch) > 0 {
-					flushBatch(f, batch)
-					batch = batch[:0]
-				}
-			}
-		}
-	}()
-
+	// D. Clean & Return: Reset fields and put back in the pool
+	resetAndPutBack(entry)
 	return nil
+
 }
 
-func flushBatch(f *os.File, batch [][]byte) {
-	for _, b := range batch {
-		f.Write(b)
-		buf := bufferPool.Get().(*bytes.Buffer)
-		buf.Reset()
-		buf.Write(b)
-		bufferPool.Put(buf)
-	}
+func resetAndPutBack(entry *AuditEntry) {
+	entry.ClientIP = ""
+	entry.Domain = ""
+	entry.Timestamp = 0
+	entry.Allowed = false
+
+	auditPool.Put(entry)
 }

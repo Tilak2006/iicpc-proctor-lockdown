@@ -1,18 +1,27 @@
 package core
 
 import (
-	"fmt"
 	"log"
+	"net"
 
 	"github.com/miekg/dns"
 )
 
-var logChannel = make(chan string)
+type LogRequest struct {
+	ClientIP string
+	Domain   string
+	Allowed  bool
+}
+
+var logChannel = make(chan LogRequest, 1000)
 
 func StartLogger() {
-	for {
-		domain := <-logChannel
-		log.Printf("Blocked DNS: %s\n", domain)
+	// loops over every request coming down the channel
+	for req := range logChannel {
+		err := LogToDisk(req.ClientIP, req.Domain, req.Allowed, "audit.json.log")
+		if err != nil {
+			log.Printf("Error writing audit log: %v", err)
+		}
 	}
 }
 
@@ -27,10 +36,15 @@ func handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	q := r.Question[0].Name
 
+	clientIP, _, _ := net.SplitHostPort(w.RemoteAddr().String())
 	if !GetPolicy().IsAllowedDomain(q) {
 		msg.Rcode = dns.RcodeNameError
 
-		logChannel <- fmt.Sprintf("dns_block:%s", q)
+		logChannel <- LogRequest{
+			ClientIP: clientIP,
+			Domain:   q,
+			Allowed:  false,
+		}
 
 		w.WriteMsg(&msg)
 		return
