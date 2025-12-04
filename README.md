@@ -1,7 +1,3 @@
-Here is the professional, GitHub-ready `README.md` file. It incorporates the file structure from your screenshot and follows the exact workflow we established.
-
------
-
 # IICPC Track 2: Network & Application Blocking System
 
 ## Project Overview
