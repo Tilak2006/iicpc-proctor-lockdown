@@ -2,6 +2,7 @@ package linux
 
 import (
 	"fmt"
+	"net"
 
 	"github.com/cilium/ebpf"
 	"github.com/cilium/ebpf/link"
@@ -9,29 +10,31 @@ import (
 )
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go blocker blocker.bpf.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go network network.bpf.c
 
 var (
+	// App Blocker Globals
 	lsmLink    link.Link
 	BlockedMap *ebpf.Map
+
+	// Network Blocker Globals
+	networkLink link.Link
+	AllowedIPs  *ebpf.Map
 )
 
+// Helper to safely convert string to fixed-size key
 func strToKey(s string) [16]byte {
 	var key [16]byte
 	copy(key[:], s)
-
 	return key
 }
 
+// SyncBlockedApps updates the kernel map with the list of forbidden app names
 func SyncBlockedApps(apps []string) error {
 	for _, appName := range apps {
-		// 1. Convert the string to a key (using our helper)
 		key := strToKey(appName)
-
-		// 2. Define the value for "Blocked" (1)
-		// We use uint32 because the C map defines the value as __u32
 		value := uint32(1)
 
-		// 3. Write to the kernel map
 		if err := BlockedMap.Put(key, value); err != nil {
 			return fmt.Errorf("failed to update map: %w", err)
 		}
@@ -39,16 +42,35 @@ func SyncBlockedApps(apps []string) error {
 	return nil
 }
 
+// AllowIP adds a single IPv4 address to the allowlist map
+func AllowIP(ipStr string) error {
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return fmt.Errorf("invalid ip: %s", ipStr)
+	}
+
+	ipv4 := ip.To4()
+	if ipv4 == nil {
+		return fmt.Errorf("not an ipv4 address: %s", ipStr)
+	}
+
+	// Convert IP to Little Endian uint32
+	ipInt := uint32(ipv4[0]) | uint32(ipv4[1])<<8 | uint32(ipv4[2])<<16 | uint32(ipv4[3])<<24
+	value := uint32(1)
+
+	if err := AllowedIPs.Put(ipInt, value); err != nil {
+		return fmt.Errorf("update allowed map: %w", err)
+	}
+	return nil
+}
+
+// StartBlocker loads the App Blocker (LSM Hook)
 func StartBlocker() error {
-	// allow the current process to lock memory for eBPF resources
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("remove memlock: %w", err)
 	}
 
-	// declare the variable for the generated objects (blocked objs)
 	var objs blockerObjects
-
-	// This takes the bytecode, sends it to the kernel, and populates 'objs' with the handles
 	if err := loadBlockerObjects(&objs, nil); err != nil {
 		return fmt.Errorf("load blocker objects: %w", err)
 	}
@@ -59,7 +81,38 @@ func StartBlocker() error {
 	lsmLink, err = link.AttachLSM(link.LSMOptions{Program: objs.RestrictExec})
 	if err != nil {
 		return fmt.Errorf("attach lsm: %w", err)
-
 	}
+
+	return nil
+}
+
+// StartNetworkBlocker loads the Network Filter (TCX Hook)
+func StartNetworkBlocker(ifaceName string) error {
+	// 1. Get the Interface (e.g. "wlp1s0")
+	iface, err := net.InterfaceByName(ifaceName)
+	if err != nil {
+		return fmt.Errorf("lookup interface %s: %w", ifaceName, err)
+	}
+
+	// 2. Load the eBPF objects
+	var objs networkObjects
+	if err := loadNetworkObjects(&objs, nil); err != nil {
+		return fmt.Errorf("load network objects: %w", err)
+	}
+
+	// 3. Save map handle globally
+	AllowedIPs = objs.AllowedIps
+
+	// 4. Attach to Egress (Outgoing Traffic) using TCX
+	// TCX is the modern, high-performance replacement for legacy TC.
+	networkLink, err = link.AttachTCX(link.TCXOptions{
+		Program:   objs.EgressFilter,
+		Interface: iface.Index,
+		Attach:    ebpf.AttachTCXEgress,
+	})
+	if err != nil {
+		return fmt.Errorf("attach tcx: %w", err)
+	}
+
 	return nil
 }

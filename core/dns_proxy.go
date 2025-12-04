@@ -3,6 +3,7 @@ package core
 import (
 	"log"
 	"net"
+	"strings"
 
 	"github.com/miekg/dns"
 )
@@ -34,7 +35,8 @@ func handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 		return
 	}
 
-	q := r.Question[0].Name
+	rawQ := r.Question[0].Name
+	q := strings.TrimSuffix(rawQ, ".")
 
 	clientIP, _, _ := net.SplitHostPort(w.RemoteAddr().String())
 	if !GetPolicy().IsAllowedDomain(q) {
@@ -48,6 +50,12 @@ func handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 		w.WriteMsg(&msg)
 		return
+	}
+
+	logChannel <- LogRequest{
+		ClientIP: clientIP,
+		Domain:   q,
+		Allowed:  true,
 	}
 
 	c := new(dns.Client)

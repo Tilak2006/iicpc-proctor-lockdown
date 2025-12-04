@@ -1,7 +1,9 @@
 {
   "allowed_domains": [
     "codeforces.com",
-    ".codeforces.com"
+    ".codeforces.com",
+    ".iicpc.com",
+    "iicpc.com"
   ],
   "allowed_apps": [
     "/usr/bin/chromium",

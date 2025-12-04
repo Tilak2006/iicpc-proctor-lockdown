@@ -4,10 +4,12 @@ go 1.24.0
 
 toolchain go1.24.10
 
-require github.com/miekg/dns v1.1.68
+require (
+	github.com/cilium/ebpf v0.20.1-0.20251204155832-f150ced93791
+	github.com/miekg/dns v1.1.68
+)
 
 require (
-	github.com/cilium/ebpf v0.20.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.46.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
