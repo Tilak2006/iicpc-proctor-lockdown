@@ -8,8 +8,10 @@ import (
 	"sync/atomic"
 )
 
+// atomic.Value allows lock-free reads of the policy configuration.
 var currentPolicy atomic.Value
 
+// ensures policy is never nil to prevent panics on startup
 func init() {
 	currentPolicy.Store(&Policy{})
 }
@@ -24,6 +26,7 @@ func GetPolicy() *Policy {
 	return currentPolicy.Load().(*Policy)
 }
 
+// triggers the orchestrator to enforce new rules in the kernel
 func ReloadPolicy(path string) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
@@ -32,7 +35,7 @@ func ReloadPolicy(path string) error {
 
 	var p Policy
 	if err := json.Unmarshal(content, &p); err != nil {
-		return fmt.Errorf("unmarshal policy json: %w", err)
+		return fmt.Errorf("unmarshal policy: %w", err)
 	}
 
 	currentPolicy.Store(&p)
@@ -44,8 +47,8 @@ func ReloadPolicy(path string) error {
 	return nil
 }
 
+// IsAllowedDomain checks for exact matches or the subdomain matches
 func (p *Policy) IsAllowedDomain(domain string) bool {
-
 	for _, d := range p.AllowedDomains {
 		if d == domain {
 			return true

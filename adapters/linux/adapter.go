@@ -44,6 +44,10 @@ func SyncBlockedApps(apps []string) error {
 
 // AllowIP adds a single IPv4 address to the allowlist map
 func AllowIP(ipStr string) error {
+
+	if AllowedIPs == nil {
+		return nil // Just ignore it, don't crash!
+	}
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
 		return fmt.Errorf("invalid ip: %s", ipStr)

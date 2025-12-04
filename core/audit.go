@@ -2,8 +2,7 @@ package core
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
+	"io"
 	"sync"
 	"time"
 )
@@ -15,17 +14,16 @@ type AuditEntry struct {
 	Allowed   bool   `json:"allowed"`
 }
 
+// auditPool reduces GC pressure as it recycles AuditEntry structs
 var auditPool = sync.Pool{
 	New: func() interface{} {
 		return &AuditEntry{}
 	},
 }
 
-func LogToDisk(ip, domain string, allowed bool, filename string) error {
-	// borrows the generic item (interface{}) from auditPool
+// WriteLog serializes a log entry to the provided writer using a pooled struct
+func WriteLog(w io.Writer, ip, domain string, allowed bool) error {
 	v := auditPool.Get()
-
-	// this tells the compiler "Trust me, this box contains an *AuditEntry"
 	entry := v.(*AuditEntry)
 
 	entry.Timestamp = time.Now().Unix()
@@ -33,25 +31,14 @@ func LogToDisk(ip, domain string, allowed bool, filename string) error {
 	entry.Domain = domain
 	entry.Allowed = allowed
 
-	f, err := os.OpenFile(filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		// Even if writing fails, we MUST still return the struct to the pool!
+	// encoding directly to the open stream
+	if err := json.NewEncoder(w).Encode(entry); err != nil {
 		resetAndPutBack(entry)
-		return fmt.Errorf("failed to open audit log: %w", err)
+		return err
 	}
 
-	// Create a JSON encoder and write the line
-	if err := json.NewEncoder(f).Encode(entry); err != nil {
-		f.Close()
-		resetAndPutBack(entry)
-		return fmt.Errorf("failed to write audit log: %w", err)
-	}
-	f.Close()
-
-	// D. Clean & Return: Reset fields and put back in the pool
 	resetAndPutBack(entry)
 	return nil
-
 }
 
 func resetAndPutBack(entry *AuditEntry) {
@@ -59,6 +46,5 @@ func resetAndPutBack(entry *AuditEntry) {
 	entry.Domain = ""
 	entry.Timestamp = 0
 	entry.Allowed = false
-
 	auditPool.Put(entry)
 }

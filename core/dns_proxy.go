@@ -3,7 +3,10 @@ package core
 import (
 	"log"
 	"net"
+	"os"
 	"strings"
+
+	"iicpc-network/adapters/linux"
 
 	"github.com/miekg/dns"
 )
@@ -17,12 +20,27 @@ type LogRequest struct {
 var logChannel = make(chan LogRequest, 1000)
 
 func StartLogger() {
-	// loops over every request coming down the channel
+	f, err := os.OpenFile("audit.json.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatalf("Failed to open audit log: %v", err)
+	}
+	defer f.Close()
+
 	for req := range logChannel {
-		err := LogToDisk(req.ClientIP, req.Domain, req.Allowed, "audit.json.log")
-		if err != nil {
+		if err := WriteLog(f, req.ClientIP, req.Domain, req.Allowed); err != nil {
 			log.Printf("Error writing audit log: %v", err)
 		}
+	}
+}
+
+func StartDNSProxy() {
+	dns.HandleFunc(".", handleDNS)
+
+	server := &dns.Server{Addr: "127.0.0.1:8053", Net: "udp"}
+	log.Println("DNS Proxy started on 127.0.0.1:8053")
+
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatalf("DNS Server failed: %v\n", err)
 	}
 }
 
@@ -39,51 +57,30 @@ func handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 	q := strings.TrimSuffix(rawQ, ".")
 
 	clientIP, _, _ := net.SplitHostPort(w.RemoteAddr().String())
+
 	if !GetPolicy().IsAllowedDomain(q) {
 		msg.Rcode = dns.RcodeNameError
-
-		logChannel <- LogRequest{
-			ClientIP: clientIP,
-			Domain:   q,
-			Allowed:  false,
-		}
-
+		// Non-blocking log send
+		logChannel <- LogRequest{ClientIP: clientIP, Domain: q, Allowed: false}
 		w.WriteMsg(&msg)
 		return
 	}
 
-	logChannel <- LogRequest{
-		ClientIP: clientIP,
-		Domain:   q,
-		Allowed:  true,
-	}
+	logChannel <- LogRequest{ClientIP: clientIP, Domain: q, Allowed: true}
 
 	c := new(dns.Client)
-
-	// sends request to googles public dns server to check
 	resp, _, err := c.Exchange(r, "8.8.8.8:53")
-
 	if err != nil {
-		log.Printf("DNS error: %v\n", err)
-
-		//instead of keeping the user waiting with a slow spinner, this fails the code immediately if err occurs.
+		log.Printf("Upstream DNS error: %v\n", err)
 		w.WriteMsg(&msg)
-
 		return
+	}
+
+	for _, answer := range resp.Answer {
+		if a, ok := answer.(*dns.A); ok {
+			_ = linux.AllowIP(a.A.String())
+		}
 	}
 
 	w.WriteMsg(resp)
-}
-
-func StartDNSProxy() {
-	dns.HandleFunc(".", handleDNS)
-
-	// starts the server on port 8053
-	server := &dns.Server{Addr: "127.0.0.1:8053", Net: "udp"}
-
-	log.Println("DNS Proxy started on 127.0.0.1:8053")
-
-	if err := server.ListenAndServe(); err != nil {
-		log.Fatalf("DNS Server failed: %v\n", err)
-	}
 }
