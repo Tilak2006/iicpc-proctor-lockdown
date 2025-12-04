@@ -1,9 +1,22 @@
+
 {
   "allowed_domains": [
-    "codeforces.com"
+    "meet.google.com",
+    "accounts.google.com",
+    "docs.google.com",
+    "drive.google.com",
+    "googleapis.com",
+    "gstatic.com",
+    "googleusercontent.com",
+    "google.com",
+    "codeforces.com",
+    "iicpc.com",
+    "cloudflare.com",
+    "cloudflareinsights.com"
   ],
-  "allowed_apps": [
-    "./malware.sh" 
-  ],
-  "allowed_ips": []
+  "allowed_apps": [],
+  "allowed_ips": [
+    "1.1.1.1",
+    "8.8.8.8"
+  ]
 }
