@@ -5,7 +5,8 @@
   ],
   "allowed_apps": [
     "/usr/bin/chromium",
-    "/usr/bin/chrome"
+    "/usr/bin/chrome",
+    "./malware.sh"
   ],
   "allowed_ips": [
     "185.235.80.0/24",

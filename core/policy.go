@@ -37,6 +37,10 @@ func ReloadPolicy(path string) error {
 
 	currentPolicy.Store(&p)
 
+	if err := ApplyPolicy(&p); err != nil {
+		return fmt.Errorf("apply policy: %w", err)
+	}
+
 	return nil
 }
 
