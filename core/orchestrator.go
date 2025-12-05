@@ -6,7 +6,7 @@ import (
 )
 
 func ApplyPolicy(p *Policy) error {
-	if err := linux.SyncBlockedApps(p.AllowedApps); err != nil {
+	if err := linux.SyncAllowedApps(p.AllowedApps); err != nil {
 		return fmt.Errorf("sync blocked apps: %w", err)
 	}
 

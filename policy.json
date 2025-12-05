@@ -1,4 +1,3 @@
-
 {
   "allowed_domains": [
     "meet.google.com",
@@ -9,14 +8,41 @@
     "gstatic.com",
     "googleusercontent.com",
     "google.com",
+    "ggpht.com",
     "codeforces.com",
     "iicpc.com",
     "cloudflare.com",
-    "cloudflareinsights.com"
+    "cloudflareinsights.com",
+    "meet.google.com",
+    "accounts.google.com",
+    "docs.google.com",
+    "drive.google.com",
+    "calendar.google.com",
+    "contacts.google.com",
+    "hangouts.google.com",
+    "chat.google.com",
+    "googleapis.com",
+    "gstatic.com",
+    "googleusercontent.com",
+    "google.com",
+    "ggpht.com",
+    "youtube.com",
+    "ytimg.com",
+    "codeforces.com",
+    "iicpc.com",
+    "cloudflare.com",
+    "cloudflareinsights.com",
+    "video.google.com"
   ],
-  "allowed_apps": [],
-  "allowed_ips": [
-    "1.1.1.1",
-    "8.8.8.8"
-  ]
+  "allowed_apps": [
+    "bash", "sh", "dash", "zsh",
+    "ls", "cat", "echo", "ps", "kill", "pkill", "grep",
+    "vim", "nano",
+    "curl", "ping", "sudo",
+    "chrome", "google-chrome", "google-chrome-stable", "/usr/bin/google-chrome", "/opt/google/chrome/chrome",
+    "chromium", "chromium-browser", "/usr/bin/chromium-browser",
+    "firefox", "/usr/bin/firefox",
+    "systemd-resolved"
+  ],
+  "allowed_ips": []
 }

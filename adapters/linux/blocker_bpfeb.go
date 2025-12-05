@@ -60,7 +60,7 @@ type blockerProgramSpecs struct {
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type blockerMapSpecs struct {
-	BlockedApps *ebpf.MapSpec `ebpf:"blocked_apps"`
+	AllowedApps *ebpf.MapSpec `ebpf:"allowed_apps"`
 }
 
 // blockerObjects contains all objects after they have been loaded into the kernel.
@@ -82,12 +82,12 @@ func (o *blockerObjects) Close() error {
 //
 // It can be passed to loadBlockerObjects or ebpf.CollectionSpec.LoadAndAssign.
 type blockerMaps struct {
-	BlockedApps *ebpf.Map `ebpf:"blocked_apps"`
+	AllowedApps *ebpf.Map `ebpf:"allowed_apps"`
 }
 
 func (m *blockerMaps) Close() error {
 	return _BlockerClose(
-		m.BlockedApps,
+		m.AllowedApps,
 	)
 }
 

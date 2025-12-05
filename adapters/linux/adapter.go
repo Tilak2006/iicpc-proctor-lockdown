@@ -3,6 +3,7 @@ package linux
 import (
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 
@@ -19,7 +20,7 @@ import (
 var (
 	// App Blocker Globals
 	lsmLink     link.Link
-	BlockedMap  *ebpf.Map
+	AllowedMap  *ebpf.Map // Renamed from BlockedMap
 	blockerObjs *blockerObjects
 
 	// Network Blocker Globals
@@ -36,16 +37,27 @@ func strToKey(s string) [16]byte {
 	return key
 }
 
-// SyncBlockedApps updates the App Blocker map
-func SyncBlockedApps(apps []string) error {
-	if BlockedMap == nil {
+// SyncAllowedApps updates the App Blocker map
+func SyncAllowedApps(apps []string) error {
+	if AllowedMap == nil {
 		return nil // Safety check
 	}
+
+	// Clear map first to remove old entries
+	iter := AllowedMap.Iterate()
+	var key [16]byte
+	var val uint32
+	for iter.Next(&key, &val) {
+		AllowedMap.Delete(key)
+	}
+
+	log.Printf("  → Syncing %d allowed apps to map", len(apps))
 	for _, appName := range apps {
 		key := strToKey(appName)
-		if err := BlockedMap.Put(key, uint32(1)); err != nil {
+		if err := AllowedMap.Put(key, uint32(1)); err != nil {
 			return fmt.Errorf("update map %q: %w", appName, err)
 		}
+		log.Printf("    • Added to allowlist: %s", appName)
 	}
 	return nil
 }
@@ -76,22 +88,33 @@ func AllowIP(ipStr string) error {
 
 // StartBlocker loads the App Blocker (LSM)
 func StartBlocker() error {
+	log.Println("  → Removing memlock limit...")
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("memlock: %w", err)
 	}
 
+	log.Println("  → Loading eBPF objects...")
 	var objs blockerObjects
 	if err := loadBlockerObjects(&objs, nil); err != nil {
 		return fmt.Errorf("load blocker: %w", err)
 	}
 	blockerObjs = &objs
-	BlockedMap = objs.BlockedApps
+	AllowedMap = objs.AllowedApps // Changed from BlockedApps
 
+	log.Printf("  → eBPF program loaded, FD: %d", objs.RestrictExec.FD())
+	log.Printf("  → Map loaded, FD: %d", objs.AllowedApps.FD())
+
+	log.Println("  → Attaching to LSM hook bprm_check_security...")
 	var err error
-	lsmLink, err = link.AttachLSM(link.LSMOptions{Program: objs.RestrictExec})
+	lsmLink, err = link.AttachLSM(link.LSMOptions{
+		Program: objs.RestrictExec,
+	})
 	if err != nil {
+		log.Printf("  ✗ LSM attachment failed: %v", err)
 		return fmt.Errorf("attach lsm: %w", err)
 	}
+
+	log.Printf("  → LSM link created successfully")
 	return nil
 }
 
@@ -162,7 +185,7 @@ func StopBlocker() error {
 		blockerObjs.Close()
 		blockerObjs = nil
 	}
-	BlockedMap = nil
+	AllowedMap = nil // Changed from BlockedMap
 	return nil
 }
 

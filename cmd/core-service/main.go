@@ -4,6 +4,7 @@ import (
 	"iicpc-network/adapters/linux"
 	"iicpc-network/core"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -36,23 +37,56 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Start App Blocker (LSM)
+	// Start App Blocker (LSM) - ADD MORE DETAILED LOGGING
+	log.Println("🔄 Attempting to start app blocker...")
 	if err := linux.StartBlocker(); err != nil {
-		log.Fatalf("Failed to start app blocker: %v", err)
+		log.Fatalf("❌ Failed to start app blocker: %v", err)
 	}
 	log.Println("✓ App blocker started")
 
+	// VERIFY IT'S ACTUALLY ATTACHED
+	log.Println("🔄 Verifying LSM attachment...")
+	// This will be checked externally with bpftool
+
 	// Start Network Blocker (TC)
+	log.Println("🔄 Starting network blocker...")
 	if err := linux.StartNetworkBlocker("wlp1s0"); err != nil {
-		log.Fatalf("Failed to start network blocker: %v", err)
+		log.Fatalf("❌ Failed to start network blocker: %v", err)
 	}
 	log.Println("✓ Network blocker attached to wlp1s0")
 
 	// Load policy and apply initial rules
+	log.Println("🔄 Loading policy...")
 	if err := core.ReloadPolicy("policy.json"); err != nil {
-		log.Fatalf("Failed to load policy: %v", err)
+		log.Fatalf("❌ Failed to load policy: %v", err)
 	}
 	log.Println("✓ Policy loaded")
+
+	// Resolve and allow critical domains at startup
+	log.Println("🔄 Pre-resolving critical domains...")
+	criticalDomains := []string{
+		"meet.google.com",
+		"accounts.google.com",
+		"docs.google.com",
+		"codeforces.com",
+	}
+
+	for _, domain := range criticalDomains {
+		ips, err := net.LookupIP(domain)
+		if err != nil {
+			log.Printf("Warning: Failed to resolve %s: %v", domain, err)
+			continue
+		}
+		for _, ip := range ips {
+			if ipv4 := ip.To4(); ipv4 != nil {
+				if err := linux.AllowIP(ipv4.String()); err != nil {
+					log.Printf("Warning: Failed to allow IP %s for %s: %v", ipv4, domain, err)
+				} else {
+					log.Printf("✓ Pre-allowed IP: %s (%s)", ipv4, domain)
+				}
+			}
+		}
+	}
 
 	// Add initial allowed IPs from policy
 	policy := core.GetPolicy()

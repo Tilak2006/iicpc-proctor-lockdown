@@ -33,10 +33,24 @@ int egress_filter(struct __sk_buff *skb) {
 
     __u32 dest_ip = ip->daddr;
 
+    // Allow localhost
     if ((dest_ip & 0x000000FF) == 0x7F) {
         return TC_ACT_OK;
     }
 
+    // TEMP FIX: Allow common Google and Codeforces IP ranges
+    // Google: 142.250.x.x, 172.217.x.x, 216.58.x.x, 8.8.x.x
+    __u8 first = (dest_ip & 0x000000FF);
+    __u8 second = (dest_ip >> 8) & 0xFF;
+    
+    if (first == 142 && second == 250) return TC_ACT_OK;  // Google
+    if (first == 172 && second == 217) return TC_ACT_OK;  // Google
+    if (first == 216 && second == 58) return TC_ACT_OK;   // Google
+    if (first == 8 && second == 8) return TC_ACT_OK;      // Google DNS
+    if (first == 104 && second == 21) return TC_ACT_OK;   // Codeforces CDN
+    if (first == 104 && second == 18) return TC_ACT_OK;   // Codeforces
+    
+    // Check allowlist
     __u32 *rule = bpf_map_lookup_elem(&allowed_ips, &dest_ip);
     if (rule) {
         return TC_ACT_OK;

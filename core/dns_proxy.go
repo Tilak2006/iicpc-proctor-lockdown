@@ -60,7 +60,6 @@ func handleDNS(w dns.ResponseWriter, r *dns.Msg) {
 
 	if !GetPolicy().IsAllowedDomain(q) {
 		msg.Rcode = dns.RcodeNameError
-		// Non-blocking log send
 		logChannel <- LogRequest{ClientIP: clientIP, Domain: q, Allowed: false}
 		w.WriteMsg(&msg)
 		return
