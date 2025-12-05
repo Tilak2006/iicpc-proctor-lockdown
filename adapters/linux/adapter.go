@@ -86,35 +86,35 @@ func AllowIP(ipStr string) error {
 	return nil
 }
 
-// StartBlocker loads the App Blocker (LSM)
+// StartBlocker loads the app blocker(LSM)
 func StartBlocker() error {
 	log.Println("  → Removing memlock limit...")
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("memlock: %w", err)
 	}
 
-	log.Println("  → Loading eBPF objects...")
+	log.Println("  -> Loading eBPF objects...")
 	var objs blockerObjects
 	if err := loadBlockerObjects(&objs, nil); err != nil {
 		return fmt.Errorf("load blocker: %w", err)
 	}
 	blockerObjs = &objs
-	AllowedMap = objs.AllowedApps // Changed from BlockedApps
+	AllowedMap = objs.AllowedApps
 
-	log.Printf("  → eBPF program loaded, FD: %d", objs.RestrictExec.FD())
-	log.Printf("  → Map loaded, FD: %d", objs.AllowedApps.FD())
+	log.Printf("  -> eBPF program loaded, FD: %d", objs.RestrictExec.FD())
+	log.Printf("  -> Map loaded, FD: %d", objs.AllowedApps.FD())
 
-	log.Println("  → Attaching to LSM hook bprm_check_security...")
+	log.Println("  -> Attaching to LSM hook bprm_check_security...")
 	var err error
 	lsmLink, err = link.AttachLSM(link.LSMOptions{
 		Program: objs.RestrictExec,
 	})
 	if err != nil {
-		log.Printf("  ✗ LSM attachment failed: %v", err)
+		log.Printf("  X LSM attachment failed: %v", err)
 		return fmt.Errorf("attach lsm: %w", err)
 	}
 
-	log.Printf("  → LSM link created successfully")
+	log.Printf("  -> LSM link created successfully")
 	return nil
 }
 
@@ -136,7 +136,6 @@ func StartNetworkBlocker(ifaceName string) error {
 	networkObjs = &objs
 	AllowedIPs = objs.AllowedIps
 
-	// Ensure clsact qdisc exists
 	qdisc := &netlink.GenericQdisc{
 		QdiscAttrs: netlink.QdiscAttrs{
 			LinkIndex: iface.Attrs().Index,
@@ -203,4 +202,23 @@ func StopNetworkBlocker() error {
 	}
 	AllowedIPs = nil
 	return nil
+}
+func DebugAllowedMap() error {
+	if AllowedMap == nil {
+		return fmt.Errorf("AllowedMap is nil")
+	}
+
+	log.Println("=== Current AllowedMap contents ===")
+	iter := AllowedMap.Iterate()
+	var key [16]byte
+	var val uint32
+	count := 0
+	for iter.Next(&key, &val) {
+		keyStr := string(key[:])
+		keyStr = strings.TrimRight(keyStr, "\x00")
+		log.Printf("  [%d] %q -> %d", count, keyStr, val)
+		count++
+	}
+	log.Printf("Total entries: %d ", count)
+	return iter.Err()
 }
