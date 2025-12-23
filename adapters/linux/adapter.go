@@ -18,18 +18,18 @@ import (
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go network network.bpf.c
 
 var (
-	// App Blocker Globals
+	// globals : app blocker
 	lsmLink     link.Link
-	AllowedMap  *ebpf.Map // Renamed from BlockedMap
+	AllowedMap  *ebpf.Map
 	blockerObjs *blockerObjects
 
-	// Network Blocker Globals
+	// globals : net blocker
 	tcFilter    *netlink.BpfFilter
 	AllowedIPs  *ebpf.Map
 	networkObjs *networkObjects
 )
 
-// strToKey converts string to fixed-size key
+// strToKey converts string to fixed size key
 func strToKey(s string) [16]byte {
 	var key [16]byte
 	s = strings.TrimSpace(strings.ToLower(s))
@@ -51,7 +51,7 @@ func SyncAllowedApps(apps []string) error {
 		AllowedMap.Delete(key)
 	}
 
-	log.Printf("  → Syncing %d allowed apps to map", len(apps))
+	log.Printf("  -> Syncing %d allowed apps to map", len(apps))
 	for _, appName := range apps {
 		key := strToKey(appName)
 		if err := AllowedMap.Put(key, uint32(1)); err != nil {
@@ -88,7 +88,7 @@ func AllowIP(ipStr string) error {
 
 // StartBlocker loads the app blocker(LSM)
 func StartBlocker() error {
-	log.Println("  → Removing memlock limit...")
+	log.Println("  -> Removing memlock limit...")
 	if err := rlimit.RemoveMemlock(); err != nil {
 		return fmt.Errorf("memlock: %w", err)
 	}
@@ -181,7 +181,7 @@ func StopBlocker() error {
 		blockerObjs.Close()
 		blockerObjs = nil
 	}
-	AllowedMap = nil // Changed from BlockedMap
+	AllowedMap = nil
 	return nil
 }
 

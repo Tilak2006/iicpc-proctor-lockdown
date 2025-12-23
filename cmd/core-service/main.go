@@ -35,27 +35,26 @@ func main() {
 		os.Exit(0)
 	}()
 
-	// Start App Blocker (LSM)
+	// starting app blocker (LSM hook)
 	log.Println("Attempting to start app blocker...")
 	if err := linux.StartBlocker(); err != nil {
 		log.Fatalf("Failed to start app blocker: %v", err)
 	}
 	log.Println("App blocker started")
 
-	// Load policy BEFORE starting network blocker
+	// load policy BEFORE starting network blocker
 	log.Println("Loading policy...")
 	if err := core.ReloadPolicy("policy.json"); err != nil {
 		log.Fatalf("Failed to load policy: %v", err)
 	}
 	log.Println("Policy loaded")
 
-	// Verify map contents
+	// verify map contents
 	log.Println("Verifying map contents...")
 	if err := linux.DebugAllowedMap(); err != nil {
 		log.Printf("Warning: Could not debug map: %v", err)
 	}
 
-	// Resolve critical domains BEFORE starting network blocker
 	log.Println("Pre-resolving critical domains...")
 	criticalDomains := []string{
 		"docs.google.com",
@@ -86,7 +85,7 @@ func main() {
 		}
 	}
 
-	// Add initial allowed IPs from policy
+	// add initial allowed IPs from policy
 	policy := core.GetPolicy()
 	for _, ip := range policy.AllowedIPs {
 		if err := linux.AllowIP(ip); err != nil {
@@ -109,10 +108,10 @@ func main() {
 		log.Println(" Network blocker attached to wlp1s0")
 	}
 
-	// Start audit logger in background
+	// start audit logger in background
 	go core.StartLogger()
 
-	// Start DNS proxy (blocks here)
+	// start DNS proxy(blocks here)
 	log.Println("Starting DNS proxy on 127.0.0.1:8053")
 	core.StartDNSProxy()
 }
