@@ -140,15 +140,12 @@ func StartNetworkBlocker(ifaceName string) error {
 		QdiscAttrs: netlink.QdiscAttrs{
 			LinkIndex: iface.Attrs().Index,
 			Handle:    netlink.MakeHandle(0xffff, 0),
-			Parent:    netlink.HANDLE_CLSACT,
+			Parent:    netlink.HANDLE_ROOT,
 		},
 		QdiscType: "clsact",
 	}
-	if err := netlink.QdiscAdd(qdisc); err != nil {
-		// Ignore if already exists
-		if !strings.Contains(err.Error(), "file exists") {
-			return fmt.Errorf("add clsact qdisc: %w", err)
-		}
+	if err := netlink.QdiscReplace(qdisc); err != nil {
+		return fmt.Errorf("replace clsact qdisc: %w", err)
 	}
 
 	// Attach TC filter to egress

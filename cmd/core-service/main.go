@@ -11,64 +11,52 @@ import (
 )
 
 func main() {
-	// Setup graceful shutdown handler
+	// shutdown handler
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-sigChan
-		log.Println("\n Shutting down gracefully...")
-
-		// Clean up network blocker
+		log.Println("\n Shutting down...")
 		if err := linux.StopNetworkBlocker(); err != nil {
 			log.Printf("Warning: Failed to stop network blocker: %v", err)
 		} else {
-			log.Println(" Network blocker detached")
+			log.Println("Network blocker detached")
 		}
 
 		// Clean up app blocker
 		if err := linux.StopBlocker(); err != nil {
 			log.Printf("Warning: Failed to stop app blocker: %v", err)
 		} else {
-			log.Println(" App blocker detached")
+			log.Println("App blocker detached")
 		}
 
-		log.Println(" Cleanup complete - internet restored!")
+		log.Println("Cleanup complete - internet restored!")
 		os.Exit(0)
 	}()
 
-	// Start App Blocker (LSM) - ADD MORE DETAILED LOGGING
-	log.Println(" Attempting to start app blocker...")
+	// Start App Blocker (LSM)
+	log.Println("Attempting to start app blocker...")
 	if err := linux.StartBlocker(); err != nil {
-		log.Fatalf(" Failed to start app blocker: %v", err)
+		log.Fatalf("Failed to start app blocker: %v", err)
 	}
-	log.Println(" App blocker started")
+	log.Println("App blocker started")
 
-	// VERIFY IT'S ACTUALLY ATTACHED
-	log.Println(" Verifying LSM attachment...")
-	// This will be checked externally with bpftool
-
-	// Start Network Blocker (TC)
-	log.Println(" Starting network blocker...")
-	if err := linux.StartNetworkBlocker("wlp1s0"); err != nil {
-		log.Fatalf(" Failed to start network blocker: %v", err)
-	}
-	log.Println(" Network blocker attached to wlp1s0")
-
-	// Load policy and apply initial rules
-	log.Println(" Loading policy...")
+	// Load policy BEFORE starting network blocker
+	log.Println("Loading policy...")
 	if err := core.ReloadPolicy("policy.json"); err != nil {
-		log.Fatalf(" Failed to load policy: %v", err)
+		log.Fatalf("Failed to load policy: %v", err)
 	}
-	log.Println(" Policy loaded")
+	log.Println("Policy loaded")
 
-	log.Println(" Policy loaded")
-
-	log.Println(" Verifying map contents...")
+	// Verify map contents
+	log.Println("Verifying map contents...")
 	if err := linux.DebugAllowedMap(); err != nil {
 		log.Printf("Warning: Could not debug map: %v", err)
 	}
-	log.Println(" Pre-resolving critical domains...")
+
+	// Resolve critical domains BEFORE starting network blocker
+	log.Println("Pre-resolving critical domains...")
 	criticalDomains := []string{
 		"docs.google.com",
 		"drive.google.com",
@@ -92,7 +80,7 @@ func main() {
 				if err := linux.AllowIP(ipv4.String()); err != nil {
 					log.Printf("Warning: Failed to allow IP %s for %s: %v", ipv4, domain, err)
 				} else {
-					log.Printf(" Pre-allowed IP: %s (%s)", ipv4, domain)
+					log.Printf("Pre-allowed IP: %s (%s)", ipv4, domain)
 				}
 			}
 		}
@@ -104,14 +92,27 @@ func main() {
 		if err := linux.AllowIP(ip); err != nil {
 			log.Printf("Warning: Failed to allow IP %s: %v", ip, err)
 		} else {
-			log.Printf(" Allowed IP: %s", ip)
+			log.Printf("Allowed IP: %s", ip)
 		}
+	}
+
+	// NOW start Network Blocker (TC) - AFTER resolving domains
+	log.Println("Starting network blocker...")
+	if err := linux.StartNetworkBlocker("wlp1s0"); err != nil {
+		if linux.IsUnsupported(err) {
+			log.Println("Network blocker not supported on this interface/driver")
+			log.Println("Continuing without network enforcement")
+		} else {
+			log.Printf("Network blocker failed: %v", err)
+		}
+	} else {
+		log.Println(" Network blocker attached to wlp1s0")
 	}
 
 	// Start audit logger in background
 	go core.StartLogger()
 
 	// Start DNS proxy (blocks here)
-	log.Println(" Starting DNS proxy on 127.0.0.1:8053")
+	log.Println("Starting DNS proxy on 127.0.0.1:8053")
 	core.StartDNSProxy()
 }
