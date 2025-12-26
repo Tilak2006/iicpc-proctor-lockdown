@@ -4,13 +4,13 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_endian.h>
 
-#define ETH_P_IP 0x0800
-#define TC_ACT_OK 0
-#define TC_ACT_SHOT 2
+#define ETH_P_IP 0x0800 // this ethernet frame contains ipv4
+#define TC_ACT_OK 0 // this allows packet
+#define TC_ACT_SHOT 2 // this drops packet(by default in our code)
 
 char LICENSE[] SEC("license") = "GPL";
 
-
+// this eBPF map is filled by Golang
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __uint(max_entries, 4096);
@@ -19,17 +19,20 @@ struct {
 } allowed_ips SEC(".maps");
 
 SEC("classifier")
+// skb = packet metadata + data pointer
 int egress_filter(struct __sk_buff *skb) {
     void *data_end = (void *)(long)skb->data_end;
     void *data = (void *)(long)skb->data;
     struct ethhdr *eth = data;
     struct iphdr *ip;
-    struct udphdr *udp;  // ADD THIS LINE - declare the udp pointer
+    struct udphdr *udp;  // declaring the udp pointer
 
     if ((void *)(eth + 1) > data_end) return TC_ACT_OK;
 
+    // if packet is not ipv4 then ignoring it
     if (eth->h_proto != bpf_htons(ETH_P_IP)) return TC_ACT_OK;
 
+    // moving the ptr from eth header to IP header
     ip = (void *)(eth + 1);
     if ((void *)(ip + 1) > data_end) return TC_ACT_OK;
 
