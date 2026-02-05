@@ -1,8 +1,12 @@
 # IICPC Track 2: Network & Application Blocking System
 
+
 ## Project Overview
 
 This repository contains the solution for Track 2 of the IICPC Technical Challenge. It is a security appliance designed to enforce strict application allowlisting and DNS filtering. The system utilizes **Go** for high-performance user-space logic and **eBPF** for kernel-level enforcement.
+
+YT explaination : https://youtu.be/fkLX6CWht3c
+Detailed Architecture available on request - tilakj0108@gmail.com
 
 **Core Capabilities:**
 
@@ -183,3 +187,4 @@ If the application starts but does not block anything:
 1.  Verify `go generate` ran successfully without errors.
 2.  Verify `cat /sys/kernel/security/lsm` contains `bpf`.
 3.  Check kernel debug logs: `sudo cat /sys/kernel/debug/tracing/trace_pipe`.
+
